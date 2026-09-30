@@ -1,0 +1,9 @@
+{
+  "name": "EduSync AI",
+  "short_name": "EduSync",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "description": "Offline-first adaptive learning platform"
+}
