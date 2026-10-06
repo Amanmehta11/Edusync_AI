@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
+import "./App.css";
 
 function App() {
-  // =========================
+  // =====================================================
   // NORMAL QUIZ STATES
-  // =========================
+  // =====================================================
+
   const [questions, setQuestions] = useState([]);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState({});
@@ -14,78 +16,76 @@ function App() {
   const [score, setScore] = useState(null);
   const [analysis, setAnalysis] = useState(null);
 
-  // =========================
+  // =====================================================
   // PROGRESS STATES
-  // =========================
+  // =====================================================
+
   const [progress, setProgress] = useState(null);
   const [showProgress, setShowProgress] = useState(false);
+  const [showAllAttempts, setShowAllAttempts] = useState(false);
   const [topicProgress, setTopicProgress] = useState(null);
 
-  // =========================
+  // =====================================================
   // PRACTICE STATES
-  // =========================
+  // =====================================================
+
   const [practiceQuestions, setPracticeQuestions] = useState([]);
   const [practiceMode, setPracticeMode] = useState(false);
   const [practiceQuestion, setPracticeQuestion] = useState(0);
   const [practiceAnswers, setPracticeAnswers] = useState({});
   const [practiceScore, setPracticeScore] = useState(null);
 
- // =========================
-// LOAD NORMAL QUIZ
-// =========================
+  // =====================================================
+  // LOAD NORMAL QUIZ
+  // =====================================================
 
-useEffect(() => {
-  fetch("http://127.0.0.1:8000/questions")
-    .then((response) => {
-      if (!response.ok) {
-        throw new Error("Failed to fetch questions");
-      }
+  useEffect(() => {
+    fetch("http://127.0.0.1:8000/questions")
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Failed to fetch questions");
+        }
 
-      return response.json();
-    })
-    .then((data) => {
-      // Save questions locally for offline use
-      localStorage.setItem(
-        "edusync_questions",
-        JSON.stringify(data)
-      );
-
-      setQuestions(data);
-      setLoading(false);
-
-      // Start timer for first question
-      setQuestionStartTime(Date.now());
-
-      console.log("Questions loaded from backend and cached locally.");
-    })
-    .catch((error) => {
-      console.log(
-        "Backend unavailable. Trying cached questions..."
-      );
-
-      // Try loading previously cached questions
-      const cachedQuestions = localStorage.getItem(
-        "edusync_questions"
-      );
-
-      if (cachedQuestions) {
-        const data = JSON.parse(cachedQuestions);
+        return response.json();
+      })
+      .then((data) => {
+        // Save questions locally for offline use
+        localStorage.setItem("edusync_questions", JSON.stringify(data));
 
         setQuestions(data);
         setLoading(false);
+
+        // Start timer for first question
         setQuestionStartTime(Date.now());
 
-        console.log("Questions loaded from local cache.");
-      } else {
-        console.error("No cached questions available.", error);
-        setLoading(false);
-      }
-    });
-}, []);
+        console.log("Questions loaded from backend and cached locally.");
+      })
+      .catch((error) => {
+        console.log("Backend unavailable. Trying cached questions...");
 
-  // =========================
+        // Try loading previously cached questions
+        const cachedQuestions = localStorage.getItem("edusync_questions");
+
+        if (cachedQuestions) {
+          const data = JSON.parse(cachedQuestions);
+
+          setQuestions(data);
+          setLoading(false);
+          setQuestionStartTime(Date.now());
+
+          console.log("Questions loaded from local cache.");
+        } else {
+          console.error("No cached questions available.", error);
+
+          setLoading(false);
+        }
+      });
+  }, []);
+
+  // =====================================================
   // NORMAL QUIZ - SELECT ANSWER
-  // =========================
+  // =====================================================
+
   const handleAnswer = (selectedAnswer) => {
     const question = questions[currentQuestion];
 
@@ -108,9 +108,10 @@ useEffect(() => {
     }));
   };
 
-  // =========================
+  // =====================================================
   // NORMAL QUIZ - NEXT
-  // =========================
+  // =====================================================
+
   const nextQuestion = () => {
     const question = questions[currentQuestion];
 
@@ -125,9 +126,10 @@ useEffect(() => {
     }
   };
 
-  // =========================
+  // =====================================================
   // NORMAL QUIZ - PREVIOUS
-  // =========================
+  // =====================================================
+
   const previousQuestion = () => {
     if (currentQuestion > 0) {
       setCurrentQuestion((prev) => prev - 1);
@@ -135,9 +137,10 @@ useEffect(() => {
     }
   };
 
-  // =========================
+  // =====================================================
   // START RECOMMENDED PRACTICE
-  // =========================
+  // =====================================================
+
   const startPractice = async () => {
     if (!analysis?.weak_topic) return;
 
@@ -145,7 +148,7 @@ useEffect(() => {
 
     try {
       const response = await fetch(
-        `http://127.0.0.1:8000/practice/${encodeURIComponent(topic)}`
+        `http://127.0.0.1:8000/practice/${encodeURIComponent(topic)}`,
       );
 
       const data = await response.json();
@@ -170,13 +173,15 @@ useEffect(() => {
       setPracticeMode(true);
     } catch (error) {
       console.error("Error loading practice questions:", error);
+
       alert("Could not load recommended practice.");
     }
   };
 
-  // =========================
+  // =====================================================
   // PRACTICE - SELECT ANSWER
-  // =========================
+  // =====================================================
+
   const handlePracticeAnswer = (selectedAnswer) => {
     const question = practiceQuestions[practiceQuestion];
 
@@ -188,9 +193,10 @@ useEffect(() => {
     }));
   };
 
-  // =========================
+  // =====================================================
   // PRACTICE - NEXT
-  // =========================
+  // =====================================================
+
   const nextPracticeQuestion = () => {
     const question = practiceQuestions[practiceQuestion];
 
@@ -204,37 +210,35 @@ useEffect(() => {
     }
   };
 
-  // =========================
+  // =====================================================
   // PRACTICE - PREVIOUS
-  // =========================
+  // =====================================================
+
   const previousPracticeQuestion = () => {
     if (practiceQuestion > 0) {
       setPracticeQuestion((prev) => prev - 1);
     }
   };
 
-  // =========================
+  // =====================================================
   // FINISH PRACTICE
-  // =========================
+  // =====================================================
+
   const finishPractice = async (lastSelectedAnswer) => {
     // Include the answer currently selected on the last question.
-    // This avoids a stale React state value if the user clicks
-    // the option and immediately clicks Finish Practice.
     const finalAnswers = {
       ...practiceAnswers,
     };
 
-    const currentPracticeQuestion =
-      practiceQuestions[practiceQuestion];
+    const currentPracticeQuestion = practiceQuestions[practiceQuestion];
 
     if (currentPracticeQuestion && lastSelectedAnswer) {
-      finalAnswers[currentPracticeQuestion.question_id] =
-        lastSelectedAnswer;
+      finalAnswers[currentPracticeQuestion.question_id] = lastSelectedAnswer;
     }
 
     // Check that every practice question has an answer.
     const unansweredQuestion = practiceQuestions.find(
-      (question) => !finalAnswers[question.question_id]
+      (question) => !finalAnswers[question.question_id],
     );
 
     if (unansweredQuestion) {
@@ -245,65 +249,61 @@ useEffect(() => {
     let finalPracticeScore = 0;
 
     practiceQuestions.forEach((question) => {
-      if (
-        finalAnswers[question.question_id] ===
-        question.correct_answer
-      ) {
+      if (finalAnswers[question.question_id] === question.correct_answer) {
         finalPracticeScore++;
       }
     });
 
     const accuracy =
-  practiceQuestions.length > 0
-    ? Math.round(
-        (finalPracticeScore / practiceQuestions.length) * 100
-      )
-    : 0;
+      practiceQuestions.length > 0
+        ? Math.round((finalPracticeScore / practiceQuestions.length) * 100)
+        : 0;
 
-const topicId = practiceQuestions[0]?.topic_id;
+    const topicId = practiceQuestions[0]?.topic_id;
 
-try {
-  const response = await fetch(
-    "http://127.0.0.1:8000/practice-attempt",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        student_id: 1,
-        topic_id: topicId,
-        score: finalPracticeScore,
-        total_questions: practiceQuestions.length,
-        accuracy: accuracy,
-      }),
+    try {
+      const response = await fetch("http://127.0.0.1:8000/practice-attempt", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          student_id: 1,
+          topic_id: topicId,
+          score: finalPracticeScore,
+          total_questions: practiceQuestions.length,
+          accuracy: accuracy,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error(data);
+
+        alert("Practice result could not be saved.");
+
+        return;
+      }
+
+      console.log("Practice result saved:", data);
+
+      setPracticeAnswers(finalAnswers);
+      setPracticeScore(finalPracticeScore);
+      setPracticeMode(false);
+    } catch (error) {
+      console.error("Practice save error:", error);
+
+      alert("Could not save practice result.");
+
+      return;
     }
-  );
-
-  const data = await response.json();
-
-  if (!response.ok) {
-    console.error(data);
-    alert("Practice result could not be saved.");
-    return;
-  }
-
-  console.log("Practice result saved:", data);
-
-  setPracticeAnswers(finalAnswers);
-  setPracticeScore(finalPracticeScore);
-  setPracticeMode(false);
-
-} catch (error) {
-  console.error("Practice save error:", error);
-  alert("Could not save practice result.");
-  return;
-}
   };
 
-  // =========================
+  // =====================================================
   // SUBMIT NORMAL QUIZ
-  // =========================
+  // =====================================================
+
   const submitQuiz = async () => {
     const question = questions[currentQuestion];
 
@@ -325,17 +325,20 @@ try {
 
     const quizAnswers = questions.map((quizQuestion) => ({
       question_id: quizQuestion.question_id,
+
       selected_answer: answers[quizQuestion.question_id] || "",
-      response_time_seconds:
-        finalResponseTimes[quizQuestion.question_id] || 0,
+
+      response_time_seconds: finalResponseTimes[quizQuestion.question_id] || 0,
     }));
 
     try {
       const response = await fetch("http://127.0.0.1:8000/submit-quiz", {
         method: "POST",
+
         headers: {
           "Content-Type": "application/json",
         },
+
         body: JSON.stringify({
           student_id: 1,
           topic_id: 2,
@@ -349,14 +352,16 @@ try {
 
       if (!response.ok) {
         console.error(data);
+
         alert("Quiz submission failed. Check backend terminal.");
+
         return;
       }
 
       setScore(data.score);
 
       const analysisResponse = await fetch(
-        "http://127.0.0.1:8000/performance-analysis/1"
+        "http://127.0.0.1:8000/performance-analysis/1",
       );
 
       const analysisData = await analysisResponse.json();
@@ -365,25 +370,27 @@ try {
 
       if (!analysisResponse.ok) {
         console.error(analysisData);
+
         alert("Could not load performance analysis.");
+
         return;
       }
 
       setAnalysis(analysisData);
     } catch (error) {
       console.error("Error submitting quiz:", error);
+
       alert("Could not connect to backend.");
     }
   };
 
-  // =========================
+  // =====================================================
   // LOAD STUDENT PROGRESS
-  // =========================
+  // =====================================================
+
   const loadProgress = async () => {
     try {
-      const response = await fetch(
-        "http://127.0.0.1:8000/student-progress/1"
-      );
+      const response = await fetch("http://127.0.0.1:8000/student-progress/1");
 
       const data = await response.json();
 
@@ -394,7 +401,7 @@ try {
       setProgress(data);
 
       const topicResponse = await fetch(
-        "http://127.0.0.1:8000/student-topic-progress/1"
+        "http://127.0.0.1:8000/student-topic-progress/1",
       );
 
       const topicData = await topicResponse.json();
@@ -407,165 +414,143 @@ try {
       setShowProgress(true);
     } catch (error) {
       console.error("Progress error:", error);
+
       alert("Could not load student progress.");
     }
   };
 
-  // =========================
+  // =====================================================
   // LOADING
-  // =========================
+  // =====================================================
+
   if (loading) {
-    return <h2>Loading questions...</h2>;
+    return (
+      <div className="loading-screen">
+        <h2>Loading your learning session...</h2>
+      </div>
+    );
   }
 
-  // =========================
+  // =====================================================
   // NO QUESTIONS
-  // =========================
+  // =====================================================
+
   if (questions.length === 0) {
-    return <h2>No questions available.</h2>;
+    return (
+      <div className="loading-screen">
+        <h2>No questions available.</h2>
+      </div>
+    );
   }
 
   // =====================================================
   // PRACTICE SCREEN
   // =====================================================
+
   if (practiceMode && practiceQuestions.length > 0) {
     const question = practiceQuestions[practiceQuestion];
+
     const selectedAnswer = practiceAnswers[question.question_id];
 
     return (
-      <div
-        style={{
-          maxWidth: "800px",
-          margin: "40px auto",
-          padding: "20px",
-          fontFamily: "Arial",
-        }}
-      >
-        <h1>EduSync AI</h1>
+      <div className="practice-page">
+        <div className="practice-container">
+          <div className="edusync-brand">
+            <div>
+              <h1>EduSync AI</h1>
 
-        <h2>🧠 Recommended Practice</h2>
+              <span>Personalized practice</span>
+            </div>
 
-        <p>
-          Topic: <strong>{question.topic}</strong>
-        </p>
+            <span>Practice</span>
+          </div>
 
-        <p>
-          Practice Question {practiceQuestion + 1} of{" "}
-          {practiceQuestions.length}
-        </p>
+          <div className="quiz-card">
+            <span className="quiz-label">Recommended Practice</span>
 
-        <hr />
+            <p className="quiz-progress">
+              {question.topic} · Question {practiceQuestion + 1} of{" "}
+              {practiceQuestions.length}
+            </p>
 
-        <h3>{question.question_text}</h3>
+            {/* Practice progress bar */}
 
-        <div style={{ marginTop: "25px" }}>
-          <button
-            onClick={() => handlePracticeAnswer(question.option_a)}
-            style={{
-              display: "block",
-              width: "100%",
-              padding: "15px",
-              marginBottom: "12px",
-              cursor: "pointer",
-              textAlign: "left",
-              border:
-                selectedAnswer === question.option_a
-                  ? "3px solid #2563eb"
-                  : "1px solid #ccc",
-              background:
-                selectedAnswer === question.option_a ? "#eaf2ff" : "white",
-              borderRadius: "8px",
-              fontSize: "16px",
-            }}
-          >
-            A. {question.option_a}
-          </button>
-
-          <button
-            onClick={() => handlePracticeAnswer(question.option_b)}
-            style={{
-              display: "block",
-              width: "100%",
-              padding: "15px",
-              marginBottom: "12px",
-              cursor: "pointer",
-              textAlign: "left",
-              border:
-                selectedAnswer === question.option_b
-                  ? "3px solid #2563eb"
-                  : "1px solid #ccc",
-              background:
-                selectedAnswer === question.option_b ? "#eaf2ff" : "white",
-              borderRadius: "8px",
-              fontSize: "16px",
-            }}
-          >
-            B. {question.option_b}
-          </button>
-
-          <button
-            onClick={() => handlePracticeAnswer(question.option_c)}
-            style={{
-              display: "block",
-              width: "100%",
-              padding: "15px",
-              marginBottom: "12px",
-              cursor: "pointer",
-              textAlign: "left",
-              border:
-                selectedAnswer === question.option_c
-                  ? "3px solid #2563eb"
-                  : "1px solid #ccc",
-              background:
-                selectedAnswer === question.option_c ? "#eaf2ff" : "white",
-              borderRadius: "8px",
-              fontSize: "16px",
-            }}
-          >
-            C. {question.option_c}
-          </button>
-
-          <button
-            onClick={() => handlePracticeAnswer(question.option_d)}
-            style={{
-              display: "block",
-              width: "100%",
-              padding: "15px",
-              marginBottom: "12px",
-              cursor: "pointer",
-              textAlign: "left",
-              border:
-                selectedAnswer === question.option_d
-                  ? "3px solid #2563eb"
-                  : "1px solid #ccc",
-              background:
-                selectedAnswer === question.option_d ? "#eaf2ff" : "white",
-              borderRadius: "8px",
-              fontSize: "16px",
-            }}
-          >
-            D. {question.option_d}
-          </button>
-        </div>
-
-        <hr />
-
-        <div style={{ display: "flex", gap: "10px" }}>
-          {practiceQuestion > 0 && (
-            <button onClick={previousPracticeQuestion}>Previous</button>
-          )}
-
-          {practiceQuestion < practiceQuestions.length - 1 && (
-            <button onClick={nextPracticeQuestion}>Next</button>
-          )}
-
-          {practiceQuestion === practiceQuestions.length - 1 && (
-            <button
-              onClick={() => finishPractice(selectedAnswer)}
+            <div
+              style={{
+                width: "100%",
+                height: "5px",
+                background: "var(--surface-soft)",
+                borderRadius: "10px",
+                overflow: "hidden",
+                marginBottom: "28px",
+              }}
             >
-              Finish Practice
-            </button>
-          )}
+              <div
+                style={{
+                  width: `${
+                    ((practiceQuestion + 1) / practiceQuestions.length) * 100
+                  }%`,
+                  height: "100%",
+                  background: "var(--accent)",
+                  borderRadius: "10px",
+                  transition: "width 0.3s ease",
+                }}
+              />
+            </div>
+
+            <h2 className="quiz-question">{question.question_text}</h2>
+
+            <div className="answer-list">
+              {[
+                ["A", question.option_a],
+                ["B", question.option_b],
+                ["C", question.option_c],
+                ["D", question.option_d],
+              ].map(([letter, option]) => (
+                <button
+                  key={letter}
+                  type="button"
+                  className={`answer-option ${
+                    selectedAnswer === option ? "selected" : ""
+                  }`}
+                  onClick={() => handlePracticeAnswer(option)}
+                >
+                  <span className="answer-letter">{letter}</span>
+
+                  <span>{option}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="quiz-actions">
+              {practiceQuestion > 0 ? (
+                <button
+                  className="btn btn-secondary"
+                  onClick={previousPracticeQuestion}
+                >
+                  ← Previous
+                </button>
+              ) : (
+                <span />
+              )}
+
+              {practiceQuestion < practiceQuestions.length - 1 ? (
+                <button
+                  className="btn btn-primary"
+                  onClick={nextPracticeQuestion}
+                >
+                  Next →
+                </button>
+              ) : (
+                <button
+                  className="btn btn-primary"
+                  onClick={() => finishPractice(selectedAnswer)}
+                >
+                  Finish Practice →
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -574,351 +559,503 @@ try {
   // =====================================================
   // NORMAL QUIZ + RESULT SCREEN
   // =====================================================
+
   const question = questions[currentQuestion];
 
   return (
-    <div
-      style={{
-        maxWidth: "800px",
-        margin: "40px auto",
-        padding: "20px",
-        fontFamily: "Arial",
-      }}
-    >
-      {/* =====================================================
-          NORMAL QUIZ
-      ===================================================== */}
-      {score === null && (
-        <>
-          <h1>EduSync AI</h1>
+    <div className="edusync-app">
+      <div className="edusync-container">
+        {/* =====================================================
+            NORMAL QUIZ
+        ===================================================== */}
 
-          <h2>Adaptive Quiz</h2>
+        {score === null && (
+          <>
+            <div className="edusync-brand">
+              <div>
+                <h1>EduSync AI</h1>
 
-          <p>
-            Question {currentQuestion + 1} of {questions.length}
-          </p>
+                <span>Adaptive learning platform</span>
+              </div>
 
-          <hr />
+              <span>Assessment</span>
+            </div>
 
-          <h3>{question.question_text}</h3>
+            <div className="quiz-card">
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "18px",
+                }}
+              >
+                <span className="quiz-label">Adaptive Assessment</span>
 
-          <div>
-            <label>
-              <input
-                type="radio"
-                name="answer"
-                checked={answers[question.question_id] === question.option_a}
-                onChange={() => handleAnswer(question.option_a)}
-              />{" "}
-              A. {question.option_a}
-            </label>
-
-            <br />
-            <br />
-
-            <label>
-              <input
-                type="radio"
-                name="answer"
-                checked={answers[question.question_id] === question.option_b}
-                onChange={() => handleAnswer(question.option_b)}
-              />{" "}
-              B. {question.option_b}
-            </label>
-
-            <br />
-            <br />
-
-            <label>
-              <input
-                type="radio"
-                name="answer"
-                checked={answers[question.question_id] === question.option_c}
-                onChange={() => handleAnswer(question.option_c)}
-              />{" "}
-              C. {question.option_c}
-            </label>
-
-            <br />
-            <br />
-
-            <label>
-              <input
-                type="radio"
-                name="answer"
-                checked={answers[question.question_id] === question.option_d}
-                onChange={() => handleAnswer(question.option_d)}
-              />{" "}
-              D. {question.option_d}
-            </label>
-          </div>
-
-          {responseTimes[question.question_id] !== undefined && (
-            <p>
-              Response time: {responseTimes[question.question_id]} seconds
-            </p>
-          )}
-
-          <hr />
-
-          <div>
-            {currentQuestion > 0 && (
-              <button onClick={previousQuestion}>Previous</button>
-            )}{" "}
-
-            {currentQuestion < questions.length - 1 && (
-              <button onClick={nextQuestion}>Next</button>
-            )}
-
-            {currentQuestion === questions.length - 1 && (
-              <button onClick={submitQuiz}>Submit Quiz</button>
-            )}
-          </div>
-        </>
-      )}
-
-      {/* =====================================================
-          RESULT
-      ===================================================== */}
-      {score !== null && (
-        <div>
-          <h1>EduSync AI</h1>
-
-          <h2>Your Score: {score} / {questions.length}</h2>
-
-          {analysis && (
-            <>
-              <h2>Performance Analysis</h2>
-
-              <h3>Topic Performance</h3>
-
-              {analysis.topics.map((topic) => (
-                <div key={topic.topic}>
-                  <p>
-                    <strong>{topic.topic}</strong>
-                  </p>
-
-                  <p>Accuracy: {topic.accuracy}%</p>
-
-                  <p>
-                    Correct: {topic.correct} / {topic.total}
-                  </p>
-
-                  <p>
-                    Average Response Time:{" "}
-                    {topic.average_response_time} seconds
-                  </p>
-
-                  <hr />
-                </div>
-              ))}
-
-              {/* =========================
-                  WEAK TOPIC / RECOMMENDATION
-              ========================= */}
-              {analysis.weak_topic ? (
-                <div>
-                  <h3>Weak Topic: {analysis.weak_topic.topic}</h3>
-
-                  <p>Accuracy: {analysis.weak_topic.accuracy}%</p>
-
-                  <p>
-                    Average Response Time:{" "}
-                    {analysis.weak_topic.average_response_time} seconds
-                  </p>
-
-                  <p>
-                    <strong>Recommendation:</strong>{" "}
-                    {analysis.recommendation}
-                  </p>
-
-                  <div
-                    style={{
-                      marginTop: "20px",
-                      padding: "20px",
-                      border: "1px solid #ddd",
-                      borderRadius: "10px",
-                    }}
-                  >
-                    <h3>🧠 Recommended Practice</h3>
-
-                    <p>
-                      Practice questions selected for your weak topic:
-                    </p>
-
-                    <p>
-                      <strong>{analysis.weak_topic.topic}</strong>
-                    </p>
-
-                    <button onClick={startPractice}>
-                      Start Recommended Practice
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <h3>🎉 No Major Weakness Detected</h3>
-
-                  <p>
-                    <strong>Recommendation:</strong>{" "}
-                    {analysis.recommendation}
-                  </p>
-                </div>
-              )}
-            </>
-          )}
-
-          {/* =====================================================
-              PRACTICE COMPLETED
-              IMPORTANT: OUTSIDE analysis && SO IT ALWAYS SHOWS
-          ===================================================== */}
-          {practiceScore !== null && (
-            <div
-              style={{
-                marginTop: "20px",
-                marginBottom: "20px",
-                padding: "20px",
-                border: "1px solid #ddd",
-                borderRadius: "10px",
-                background: "#f8fafc",
-              }}
-            >
-              <h3>🧠 Practice Completed</h3>
-
-              <p>
-                Practice Topic:{" "}
-                <strong>{analysis?.weak_topic?.topic || "Recommended Topic"}</strong>
-              </p>
-
-              <p>
-                Practice Score:{" "}
-                <strong>
-                  {practiceScore} / {practiceQuestions.length}
-                </strong>
-              </p>
-
-              <p>
-                Practice Accuracy:{" "}
-                <strong>
-                  {practiceQuestions.length > 0
+                <span
+                  style={{
+                    fontSize: "13px",
+                    color: "var(--text-muted)",
+                  }}
+                >
+                  {questions.length > 0
                     ? Math.round(
-                        (practiceScore / practiceQuestions.length) * 100
+                        ((currentQuestion + 1) / questions.length) * 100,
                       )
                     : 0}
                   %
-                </strong>
-              </p>
-
-              {practiceScore === practiceQuestions.length ? (
-                <p>
-                  🎉 Excellent! You answered all practice questions correctly.
-                </p>
-              ) : (
-                <p>Keep practicing this topic to improve your mastery.</p>
-              )}
-            </div>
-          )}
-
-          {/* =====================================================
-              STUDENT PROGRESS
-          ===================================================== */}
-          <button
-            onClick={loadProgress}
-            style={{
-              padding: "12px 20px",
-              marginTop: "15px",
-              cursor: "pointer",
-            }}
-          >
-            📊 View My Progress
-          </button>
-
-          {showProgress && progress && (
-            <div
-              style={{
-                marginTop: "30px",
-                padding: "25px",
-                border: "1px solid #ddd",
-                borderRadius: "12px",
-                background: "#fafafa",
-              }}
-            >
-              <h2>📊 Student Progress</h2>
-
-              <div style={{ marginTop: "15px" }}>
-                <p>
-                  <strong>Quizzes Attempted:</strong>{" "}
-                  {progress.total_attempts}
-                </p>
-
-                <p>
-                  <strong>Average Score:</strong>{" "}
-                  {progress.average_score}
-                </p>
-
-                <p>
-                  <strong>Latest Score:</strong>{" "}
-                  {progress.latest_score}
-                </p>
+                </span>
               </div>
 
-              <h3 style={{ marginTop: "25px" }}>Quiz History</h3>
+              {/* Progress bar */}
 
-              {progress.attempts.map((attempt) => (
+              <div
+                style={{
+                  width: "100%",
+                  height: "5px",
+                  background: "var(--surface-soft)",
+                  borderRadius: "10px",
+                  overflow: "hidden",
+                  marginBottom: "28px",
+                }}
+              >
                 <div
-                  key={attempt.attempt_id}
                   style={{
-                    padding: "12px",
-                    marginTop: "10px",
-                    border: "1px solid #ddd",
-                    borderRadius: "8px",
-                    background: "white",
+                    width: `${
+                      questions.length > 0
+                        ? ((currentQuestion + 1) / questions.length) * 100
+                        : 0
+                    }%`,
+                    height: "100%",
+                    background: "var(--accent)",
+                    borderRadius: "10px",
+                    transition: "width 0.3s ease",
+                  }}
+                />
+              </div>
+
+              <p className="quiz-progress">
+                Question {currentQuestion + 1} of {questions.length}
+              </p>
+
+              <h2 className="quiz-question">{question.question_text}</h2>
+
+              {/* Answer options */}
+
+              <div className="answer-list">
+                {[
+                  ["A", question.option_a],
+                  ["B", question.option_b],
+                  ["C", question.option_c],
+                  ["D", question.option_d],
+                ].map(([letter, option]) => (
+                  <button
+                    key={letter}
+                    type="button"
+                    className={`answer-option ${
+                      answers[question.question_id] === option ? "selected" : ""
+                    }`}
+                    onClick={() => handleAnswer(option)}
+                  >
+                    <span className="answer-letter">{letter}</span>
+
+                    <span>{option}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Response time */}
+
+              {responseTimes[question.question_id] !== undefined && (
+                <p
+                  style={{
+                    marginTop: "18px",
+                    fontSize: "13px",
+                    color: "var(--text-muted)",
                   }}
                 >
-                  <strong>Quiz {attempt.attempt_id}</strong>
-                  <p>Score: {attempt.score}</p>
+                  Response time: {responseTimes[question.question_id]} seconds
+                </p>
+              )}
+
+              {/* Navigation */}
+
+              <div className="quiz-actions">
+                {currentQuestion > 0 ? (
+                  <button
+                    className="btn btn-secondary"
+                    onClick={previousQuestion}
+                  >
+                    ← Previous
+                  </button>
+                ) : (
+                  <span />
+                )}
+
+                {currentQuestion < questions.length - 1 ? (
+                  <button className="btn btn-primary" onClick={nextQuestion}>
+                    Next →
+                  </button>
+                ) : (
+                  <button className="btn btn-primary" onClick={submitQuiz}>
+                    Submit Assessment →
+                  </button>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* =====================================================
+            RESULT
+        ===================================================== */}
+
+        {score !== null && (
+          <>
+            <div className="edusync-brand">
+              <div>
+                <h1>EduSync AI</h1>
+
+                <span>Learning analysis</span>
+              </div>
+
+              <span>Results</span>
+            </div>
+
+            {/* Score */}
+
+            <div className="result-header">
+              <div className="score-card">
+                <div>
+                  <div className="score-number">
+                    {score}/{questions.length}
+                  </div>
+
+                  <div className="score-label">Assessment Score</div>
                 </div>
-              ))}
+              </div>
+            </div>
 
-              {topicProgress && (
-                <div style={{ marginTop: "30px" }}>
-                  <h3>📚 Topic-wise Progress</h3>
+            {/* Performance Analysis */}
 
-                  {topicProgress.topics.map((topic) => (
-                    <div
-                      key={topic.topic}
-                      style={{
-                        padding: "15px",
-                        marginTop: "10px",
-                        border: "1px solid #ddd",
-                        borderRadius: "8px",
-                        background: "white",
-                      }}
-                    >
-                      <h4>{topic.topic}</h4>
+            {analysis && (
+              <>
+                <h2 className="section-title">Performance Analysis</h2>
 
-                      <p>
-                        Questions Attempted:{" "}
-                        {topic.questions_attempted}
+                <div className="topic-grid">
+                  {analysis.topics.map((topic) => (
+                    <div className="topic-card" key={topic.topic}>
+                      <div className="topic-card-header">
+                        <span className="topic-name">{topic.topic}</span>
+
+                        <span className="topic-accuracy">
+                          {topic.accuracy}%
+                        </span>
+                      </div>
+
+                      <div
+                        style={{
+                          width: "100%",
+                          height: "6px",
+                          background: "var(--surface-soft)",
+                          borderRadius: "10px",
+                          marginTop: "14px",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: `${topic.accuracy}%`,
+                            height: "100%",
+                            background:
+                              topic.accuracy >= 80
+                                ? "var(--success)"
+                                : "var(--danger)",
+                            borderRadius: "10px",
+                          }}
+                        />
+                      </div>
+
+                      <p
+                        style={{
+                          marginBottom: "4px",
+                          fontSize: "14px",
+                        }}
+                      >
+                        Correct: {topic.correct} / {topic.total}
                       </p>
 
-                      <p>
-                        Correct Answers:{" "}
-                        {topic.correct_answers}
-                      </p>
-
-                      <p>
-                        Accuracy:{" "}
-                        <strong>{topic.accuracy}%</strong>
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: "14px",
+                        }}
+                      >
+                        Average response time: {topic.average_response_time}{" "}
+                        seconds
                       </p>
                     </div>
                   ))}
                 </div>
-              )}
+
+                {/* =====================================================
+                    WEAK TOPIC / RECOMMENDATION
+                ===================================================== */}
+
+                {analysis.weak_topic ? (
+                  <div className="practice-recommendation">
+                    <span className="quiz-label">
+                      Personalized Recommendation
+                    </span>
+
+                    <h2 className="practice-topic">
+                      {analysis.weak_topic.topic}
+                    </h2>
+
+                    <p>
+                      This topic currently needs additional practice based on
+                      your assessment performance.
+                    </p>
+
+                    <p>
+                      Accuracy: <strong>{analysis.weak_topic.accuracy}%</strong>
+                    </p>
+
+                    <p>
+                      Average response time:{" "}
+                      <strong>
+                        {analysis.weak_topic.average_response_time} seconds
+                      </strong>
+                    </p>
+
+                    <p>
+                      <strong>Recommendation:</strong> {analysis.recommendation}
+                    </p>
+
+                    <button
+                      className="btn btn-primary"
+                      onClick={startPractice}
+                      style={{
+                        marginTop: "10px",
+                      }}
+                    >
+                      Start Recommended Practice →
+                    </button>
+                  </div>
+                ) : (
+                  <div className="practice-recommendation">
+                    <span className="quiz-label">Assessment Complete</span>
+
+                    <h2 className="practice-topic">
+                      No Major Weakness Detected
+                    </h2>
+
+                    <p>
+                      <strong>Recommendation:</strong> {analysis.recommendation}
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* =====================================================
+                PRACTICE COMPLETED
+            ===================================================== */}
+
+            {practiceScore !== null && (
+              <div
+                className="practice-recommendation"
+                style={{
+                  marginTop: "20px",
+                }}
+              >
+                <span className="quiz-label">Practice Completed</span>
+
+                <h2 className="practice-topic">Practice Results</h2>
+
+                <p>
+                  Practice Topic:{" "}
+                  <strong>
+                    {analysis?.weak_topic?.topic || "Recommended Topic"}
+                  </strong>
+                </p>
+
+                <p>
+                  Practice Score:{" "}
+                  <strong>
+                    {practiceScore} / {practiceQuestions.length}
+                  </strong>
+                </p>
+
+                <p>
+                  Practice Accuracy:{" "}
+                  <strong>
+                    {practiceQuestions.length > 0
+                      ? Math.round(
+                          (practiceScore / practiceQuestions.length) * 100,
+                        )
+                      : 0}
+                    %
+                  </strong>
+                </p>
+
+                {practiceScore === practiceQuestions.length ? (
+                  <p>
+                    🎉 Excellent! You answered all practice questions correctly.
+                  </p>
+                ) : (
+                  <p>Keep practicing this topic to improve your mastery.</p>
+                )}
+              </div>
+            )}
+
+            {/* =====================================================
+                STUDENT PROGRESS
+            ===================================================== */}
+
+            <div
+              style={{
+                marginTop: "30px",
+              }}
+            >
+              <button className="btn btn-secondary" onClick={loadProgress}>
+                View My Progress →
+              </button>
             </div>
-          )}
-        </div>
-      )}
+
+            {showProgress && progress && (
+              <div className="progress-section">
+                <h2 className="section-title">Student Progress</h2>
+
+                <div className="progress-summary">
+                  <div className="progress-stat">
+                    <span className="progress-stat-label">
+                      Quizzes Attempted
+                    </span>
+
+                    <span className="progress-stat-value">
+                      {progress.total_attempts}
+                    </span>
+                  </div>
+
+                  <div className="progress-stat">
+                    <span className="progress-stat-label">Average Score</span>
+
+                    <span className="progress-stat-value">
+                      {progress.average_score}
+                    </span>
+                  </div>
+
+                  <div className="progress-stat">
+                    <span className="progress-stat-label">Latest Score</span>
+
+                    <span className="progress-stat-value">
+                      {progress.latest_score}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Quiz History */}
+
+                {/* =====================================================
+    QUIZ HISTORY
+===================================================== */}
+
+                <h3 className="section-title">Quiz History</h3>
+
+                <div className="topic-grid">
+                  {(showAllAttempts
+                    ? [...progress.attempts].reverse()
+                    : [...progress.attempts].slice(-10).reverse()
+                  ).map((attempt) => (
+                    <div className="topic-card" key={attempt.attempt_id}>
+                      <div className="topic-card-header">
+                        <span className="topic-name">
+                          Quiz #{attempt.attempt_id}
+                        </span>
+
+                        <span className="topic-accuracy">{attempt.score}</span>
+                      </div>
+
+                      <p
+                        style={{
+                          marginBottom: 0,
+                          fontSize: "14px",
+                        }}
+                      >
+                        Assessment score
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Show / hide older attempts */}
+
+                {progress.attempts.length > 10 && (
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "center",
+                      marginTop: "18px",
+                    }}
+                  >
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() =>
+                        setShowAllAttempts((previous) => !previous)
+                      }
+                    >
+                      {showAllAttempts
+                        ? "Show Latest 10"
+                        : `View All ${progress.attempts.length} Attempts`}
+                    </button>
+                  </div>
+                )}
+
+                {/* Topic-wise Progress */}
+
+                {topicProgress && (
+                  <>
+                    <h3 className="section-title">Topic-wise Progress</h3>
+
+                    <div className="topic-grid">
+                      {topicProgress.topics.map((topic) => (
+                        <div className="topic-card" key={topic.topic}>
+                          <div className="topic-card-header">
+                            <span className="topic-name">{topic.topic}</span>
+
+                            <span className="topic-accuracy">
+                              {topic.accuracy}%
+                            </span>
+                          </div>
+
+                          <p
+                            style={{
+                              fontSize: "14px",
+                              marginBottom: "5px",
+                            }}
+                          >
+                            Questions attempted: {topic.questions_attempted}
+                          </p>
+
+                          <p
+                            style={{
+                              fontSize: "14px",
+                              marginBottom: 0,
+                            }}
+                          >
+                            Correct answers: {topic.correct_answers}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
