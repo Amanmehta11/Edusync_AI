@@ -1,61 +1,44 @@
-const CACHE_NAME = "edusync-v6";
+const CACHE_NAME = "edusync-v7";
 
 const APP_SHELL = [
   "/",
   "/index.html",
   "/manifest.json",
-  "/favicon.svg",
+  "/favicon.svg"
 ];
 
-self.addEventListener("install", (event) => {
+self.addEventListener("install", event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(async (cache) => {
-      // Cache basic application shell
+    caches.open(CACHE_NAME).then(async cache => {
       await cache.addAll(APP_SHELL);
 
-      // Read index.html to find Vite-generated JS and CSS files
-      const response = await fetch("/index.html");
-      const html = await response.text();
+      try {
+        const response = await fetch("/index.html");
+        const html = await response.text();
 
-      const assets = [];
+        const jsMatches = [
+          ...html.matchAll(/<script[^>]+src=["']([^"']+)["']/g)
+        ];
 
-      // Find JavaScript files
-      for (const match of html.matchAll(
-        /<script[^>]+src=["']([^"']+)["']/g
-      )) {
-        assets.push(match[1]);
-      }
+        const cssMatches = [
+          ...html.matchAll(/<link[^>]+href=["']([^"']+\.css)["']/g)
+        ];
 
-      // Find CSS files
-      for (const match of html.matchAll(
-        /<link[^>]+href=["']([^"']+\.css)["']/g
-      )) {
-        assets.push(match[1]);
-      }
+        const assets = [
+          ...jsMatches.map(match => match[1]),
+          ...cssMatches.map(match => match[1])
+        ];
 
-      console.log("Assets found:", assets);
-
-      // Cache all discovered production assets
-      await Promise.all(
-        assets.map(async (asset) => {
+        for (const asset of assets) {
           try {
-            const assetResponse = await fetch(asset);
-
-            if (assetResponse.ok) {
-              await cache.put(asset, assetResponse.clone());
-              console.log("Cached:", asset);
-            } else {
-              console.error(
-                "Failed to cache:",
-                asset,
-                assetResponse.status
-              );
-            }
+            await cache.add(asset);
           } catch (error) {
-            console.error("Failed to cache:", asset, error);
+            console.warn("Could not cache asset:", asset);
           }
-        })
-      );
+        }
+      } catch (error) {
+        console.warn("Could not pre-cache Vite assets:", error);
+      }
     })
   );
 
@@ -63,68 +46,66 @@ self.addEventListener("install", (event) => {
 });
 
 
-self.addEventListener("activate", (event) => {
+self.addEventListener("activate", event => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames
-          .filter((name) => name !== CACHE_NAME)
-          .map((name) => caches.delete(name))
-      );
-    })
+    caches.keys().then(keys =>
+      Promise.all(
+        keys
+          .filter(key => key !== CACHE_NAME)
+          .map(key => caches.delete(key))
+      )
+    ).then(() => self.clients.claim())
   );
-
-  self.clients.claim();
 });
 
 
-self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") {
+self.addEventListener("fetch", event => {
+  const request = event.request;
+
+  if (request.method !== "GET") {
     return;
   }
 
-  const request = event.request;
+  const url = new URL(request.url);
 
 
-  // -----------------------------------------------------
-  // STATIC ASSETS
-  // -----------------------------------------------------
+  // --------------------------------------------------
+  // 1. React / CSS / JS / images / fonts
+  // --------------------------------------------------
 
-  const isStaticAsset =
+  if (
     request.destination === "script" ||
     request.destination === "style" ||
     request.destination === "image" ||
-    request.destination === "font";
-
-  if (isStaticAsset) {
+    request.destination === "font"
+  ) {
     event.respondWith(
-      caches.match(request, { ignoreSearch: true }).then((cachedResponse) => {
+      caches.match(request, {
+        ignoreSearch: true,
+        ignoreVary: true
+      }).then(cachedResponse => {
 
-        // If asset exists in cache, use it immediately
         if (cachedResponse) {
           return cachedResponse;
         }
 
-        // Otherwise try network
-        return fetch(request)
-          .then((response) => {
+        return fetch(request).then(response => {
 
-            if (response.ok) {
-              const copy = response.clone();
+          if (response && response.ok) {
+            const responseClone = response.clone();
 
-              caches.open(CACHE_NAME).then((cache) => {
-                cache.put(request, copy);
-              });
-            }
-
-            return response;
-          })
-          .catch(() => {
-            return new Response("", {
-              status: 503,
-              statusText: "Offline",
+            caches.open(CACHE_NAME).then(cache => {
+              cache.put(request, responseClone);
             });
-          });
+          }
+
+          return response;
+        });
+      }).catch(() => {
+        return new Response("", {
+          status: 503,
+          statusText: "Offline"
+        });
       })
     );
 
@@ -132,24 +113,50 @@ self.addEventListener("fetch", (event) => {
   }
 
 
-  // -----------------------------------------------------
-  // PAGE NAVIGATION
-  // -----------------------------------------------------
+  // --------------------------------------------------
+  // 2. API requests
+  // --------------------------------------------------
 
-  if (request.mode === "navigate") {
+  if (url.hostname === "127.0.0.1" && url.port === "8000") {
+
     event.respondWith(
       fetch(request)
-        .then((response) => {
-          const copy = response.clone();
+        .then(response => {
 
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put("/index.html", copy);
-          });
+          if (response && response.ok) {
+            const responseClone = response.clone();
+
+            caches.open(CACHE_NAME).then(cache => {
+              cache.put(request, responseClone);
+            });
+          }
 
           return response;
         })
         .catch(() => {
-          return caches.match("/index.html");
+
+          return caches.match(request, {
+            ignoreSearch: true,
+            ignoreVary: true
+          }).then(cachedResponse => {
+
+            if (cachedResponse) {
+              return cachedResponse;
+            }
+
+            return new Response(
+              JSON.stringify({
+                offline: true,
+                message: "No cached data available."
+              }),
+              {
+                status: 503,
+                headers: {
+                  "Content-Type": "application/json"
+                }
+              }
+            );
+          });
         })
     );
 
@@ -157,36 +164,38 @@ self.addEventListener("fetch", (event) => {
   }
 
 
-  // -----------------------------------------------------
-  // OTHER GET REQUESTS
-  // -----------------------------------------------------
+  // --------------------------------------------------
+  // 3. Page navigation
+  // --------------------------------------------------
+
+  if (request.mode === "navigate") {
+
+    event.respondWith(
+      fetch(request)
+        .then(response => response)
+        .catch(() =>
+          caches.match("/index.html", {
+            ignoreVary: true
+          })
+        )
+    );
+
+    return;
+  }
+
+
+  // --------------------------------------------------
+  // 4. Other GET requests
+  // --------------------------------------------------
 
   event.respondWith(
-    caches.match(request, { ignoreSearch: true }).then((cachedResponse) => {
-
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-
-      return fetch(request)
-        .then((response) => {
-
-          if (response.ok) {
-            const copy = response.clone();
-
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(request, copy);
-            });
-          }
-
-          return response;
+    fetch(request)
+      .then(response => response)
+      .catch(() =>
+        caches.match(request, {
+          ignoreSearch: true,
+          ignoreVary: true
         })
-        .catch(() => {
-          return new Response("", {
-            status: 503,
-            statusText: "Offline",
-          });
-        });
-    })
+      )
   );
 });
