@@ -1,4 +1,5 @@
-const CACHE_NAME = "edusync-v7";
+
+const CACHE_NAME = "edusync-v8";
 
 const APP_SHELL = [
   "/",
@@ -68,10 +69,8 @@ self.addEventListener("fetch", event => {
 
   const url = new URL(request.url);
 
-
-  // --------------------------------------------------
   // 1. React / CSS / JS / images / fonts
-  // --------------------------------------------------
+  // Online-first, cached fallback when offline
 
   if (
     request.destination === "script" ||
@@ -80,49 +79,8 @@ self.addEventListener("fetch", event => {
     request.destination === "font"
   ) {
     event.respondWith(
-      caches.match(request, {
-        ignoreSearch: true,
-        ignoreVary: true
-      }).then(cachedResponse => {
-
-        if (cachedResponse) {
-          return cachedResponse;
-        }
-
-        return fetch(request).then(response => {
-
-          if (response && response.ok) {
-            const responseClone = response.clone();
-
-            caches.open(CACHE_NAME).then(cache => {
-              cache.put(request, responseClone);
-            });
-          }
-
-          return response;
-        });
-      }).catch(() => {
-        return new Response("", {
-          status: 503,
-          statusText: "Offline"
-        });
-      })
-    );
-
-    return;
-  }
-
-
-  // --------------------------------------------------
-  // 2. API requests
-  // --------------------------------------------------
-
-  if (url.hostname === "127.0.0.1" && url.port === "8000") {
-
-    event.respondWith(
       fetch(request)
         .then(response => {
-
           if (response && response.ok) {
             const responseClone = response.clone();
 
@@ -133,13 +91,47 @@ self.addEventListener("fetch", event => {
 
           return response;
         })
-        .catch(() => {
-
-          return caches.match(request, {
+        .catch(() =>
+          caches.match(request, {
             ignoreSearch: true,
             ignoreVary: true
           }).then(cachedResponse => {
+            return cachedResponse || new Response("", {
+              status: 503,
+              statusText: "Offline"
+            });
+          })
+        )
+    );
 
+    return;
+  }
+
+
+  // 2. API requests
+
+  if (
+    url.hostname === "127.0.0.1" &&
+    url.port === "8000"
+  ) {
+    event.respondWith(
+      fetch(request)
+        .then(response => {
+          if (response && response.ok) {
+            const responseClone = response.clone();
+
+            caches.open(CACHE_NAME).then(cache => {
+              cache.put(request, responseClone);
+            });
+          }
+
+          return response;
+        })
+        .catch(() =>
+          caches.match(request, {
+            ignoreSearch: true,
+            ignoreVary: true
+          }).then(cachedResponse => {
             if (cachedResponse) {
               return cachedResponse;
             }
@@ -156,20 +148,17 @@ self.addEventListener("fetch", event => {
                 }
               }
             );
-          });
-        })
+          })
+        )
     );
 
     return;
   }
 
 
-  // --------------------------------------------------
   // 3. Page navigation
-  // --------------------------------------------------
 
   if (request.mode === "navigate") {
-
     event.respondWith(
       fetch(request)
         .then(response => response)
@@ -184,9 +173,7 @@ self.addEventListener("fetch", event => {
   }
 
 
-  // --------------------------------------------------
   // 4. Other GET requests
-  // --------------------------------------------------
 
   event.respondWith(
     fetch(request)

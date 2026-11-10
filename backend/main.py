@@ -1,15 +1,25 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List
 import psycopg
 import os
-from dotenv import load_dotenv
+import json
 
+from dotenv import load_dotenv
+from auth import router as auth_router
+from google import genai
+
+# Load environment variables FIRST
 load_dotenv()
 
+# Gemini AI configuration
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 
 app = FastAPI()
+app.include_router(auth_router)
 
 
 # =========================
@@ -62,7 +72,42 @@ def database_test():
         "message": "Database connected successfully"
     }
 
+def get_connection():
+    return psycopg.connect(
+        host="localhost",
+        port=5432,
+        dbname="edusync",
+        user="postgres",
+        password=os.getenv("DB_PASSWORD")
+    )
 
+
+
+@app.get("/topics")
+def get_topics():
+
+    connection = get_connection()
+
+    try:
+        with connection.cursor() as cur:
+            cur.execute("""
+                SELECT topic_id, name
+                FROM topics
+                ORDER BY topic_id
+            """)
+
+            topics = cur.fetchall()
+
+            return [
+                {
+                    "topic_id": topic[0],
+                    "name": topic[1]
+                }
+                for topic in topics
+            ]
+
+    finally:
+        connection.close()
 # =========================
 # GET QUESTIONS
 # =========================
@@ -70,123 +115,188 @@ def database_test():
 @app.get("/questions")
 def get_questions():
 
-    connection = psycopg.connect(
-        host="localhost",
-        port=5432,
-        dbname="edusync",
-        user="postgres",
-        password=os.getenv("DB_PASSWORD")
-    )
+    connection = get_connection()
 
-    cursor = connection.cursor()
+    try:
+        with connection.cursor() as cursor:
 
-    cursor.execute("""
-        SELECT
-            q.question_id,
-            q.question_text,
-            q.difficulty,
-            q.question_type,
-            q.option_a,
-            q.option_b,
-            q.option_c,
-            q.option_d,
-            q.explanation,
-            q.correct_answer,
-            t.topic_id,
-            t.name AS topic
-        FROM questions q
-        JOIN topics t
-        ON q.topic_id = t.topic_id
-        WHERE q.is_practice = FALSE
-        ORDER BY q.question_id;
-    """)
+            cursor.execute("""
+                SELECT
+                    q.question_id,
+                    q.question_text,
+                    q.difficulty,
+                    q.question_type,
+                    q.option_a,
+                    q.option_b,
+                    q.option_c,
+                    q.option_d,
+                    q.explanation,
+                    q.correct_answer,
+                    t.topic_id,
+                    t.name AS topic
+                FROM questions q
+                JOIN topics t
+                    ON q.topic_id = t.topic_id
+                WHERE q.is_practice = FALSE
+                AND q.is_ai_generated = FALSE
+                ORDER BY q.question_id;
+            """)
 
-    rows = cursor.fetchall()
+            rows = cursor.fetchall()
 
-    cursor.close()
-    connection.close()
+        return [
+            {
+                "question_id": row[0],
+                "question_text": row[1],
+                "difficulty": row[2],
+                "question_type": row[3],
+                "option_a": row[4],
+                "option_b": row[5],
+                "option_c": row[6],
+                "option_d": row[7],
+                "explanation": row[8],
+                "correct_answer": row[9],
+                "topic_id": row[10],
+                "topic": row[11]
+            }
+            for row in rows
+        ]
 
-    questions = []
+    finally:
+        connection.close()
+        
+        
+        
+        
+@app.get("/ai-questions")
+def get_ai_questions():
 
-    for row in rows:
+    connection = get_connection()
 
-        questions.append({
-            "question_id": row[0],
-            "question_text": row[1],
-            "difficulty": row[2],
-            "question_type": row[3],
-            "option_a": row[4],
-            "option_b": row[5],
-            "option_c": row[6],
-            "option_d": row[7],
-            "correct_answer": row[8],
-            "explanation": row[9],
-            "topic": row[10]
-        })
+    try:
+        with connection.cursor() as cursor:
 
-    return questions
+            cursor.execute("""
+                SELECT
+                    q.question_id,
+                    q.question_text,
+                    q.difficulty,
+                    q.option_a,
+                    q.option_b,
+                    q.option_c,
+                    q.option_d,
+                    q.correct_answer,
+                    q.explanation,
+                    t.topic_id,
+                    t.name
+                FROM questions q
+                JOIN topics t
+                    ON q.topic_id = t.topic_id
+                WHERE q.is_ai_generated = TRUE
+                AND q.is_practice = FALSE
+                ORDER BY q.question_id DESC;
+            """)
 
-@app.get("/practice/{topic_name}")
-def get_practice_questions(topic_name: str):
+            rows = cursor.fetchall()
 
-    connection = psycopg.connect(
-        host="localhost",
-        port=5432,
-        dbname="edusync",
-        user="postgres",
-        password=os.getenv("DB_PASSWORD")
-    )
+        return [
+            {
+                "question_id": row[0],
+                "question_text": row[1],
+                "difficulty": row[2],
+                "option_a": row[3],
+                "option_b": row[4],
+                "option_c": row[5],
+                "option_d": row[6],
+                "correct_answer": row[7],
+                "explanation": row[8],
+                "topic_id": row[9],
+                "topic": row[10]
+            }
+            for row in rows
+        ]
 
-    cursor = connection.cursor()
+    finally:
+        connection.close()
+        
+        
+        
+        
 
-    cursor.execute(
-        """
-        SELECT
-            q.question_id,
-            q.question_text,
-            q.difficulty,
-            q.question_type,
-            q.option_a,
-            q.option_b,
-            q.option_c,
-            q.option_d,
-            q.correct_answer,
-            t.topic_id,
-            t.name AS topic
-        FROM questions q
-        JOIN topics t
-            ON q.topic_id = t.topic_id
-        WHERE LOWER(t.name) = LOWER(%s)
-        AND q.is_practice = TRUE
-        ORDER BY q.question_id
-        LIMIT 5;
-        """,
-        (topic_name,)
-    )
+@app.get("/assessment/{topic_id}")
+def get_assessment_questions(topic_id: int):
 
-    rows = cursor.fetchall()
+    connection = get_connection()
 
-    cursor.close()
-    connection.close()
+    try:
+        with connection.cursor() as cursor:
 
-    practice_questions = []
+            # Check whether topic exists
+            cursor.execute(
+                "SELECT name FROM topics WHERE topic_id = %s",
+                (topic_id,)
+            )
 
-    for row in rows:
-        practice_questions.append({
-            "question_id": row[0],
-            "question_text": row[1],
-            "difficulty": row[2],
-            "question_type": row[3],
-            "option_a": row[4],
-            "option_b": row[5],
-            "option_c": row[6],
-            "option_d": row[7],
-            "correct_answer": row[8],
-            "topic_id": row[9],
-            "topic": row[10]
-        })
+            topic = cursor.fetchone()
 
-    return practice_questions
+            if topic is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Topic not found."
+                )
+
+            # Select 10 random normal questions
+            cursor.execute("""
+                SELECT
+                    q.question_id,
+                    q.question_text,
+                    q.difficulty,
+                    q.question_type,
+                    q.option_a,
+                    q.option_b,
+                    q.option_c,
+                    q.option_d,
+                    q.explanation,
+                    q.correct_answer,
+                    t.topic_id,
+                    t.name
+                FROM questions q
+                JOIN topics t ON q.topic_id = t.topic_id
+                WHERE q.topic_id = %s
+                AND q.is_practice = FALSE
+                ORDER BY RANDOM()
+                LIMIT 10;
+            """, (topic_id,))
+
+            rows = cursor.fetchall()
+
+        if len(rows) < 10:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Only {len(rows)} normal questions available. 10 are required."
+            )
+
+        return [
+            {
+                "question_id": row[0],
+                "question_text": row[1],
+                "difficulty": row[2],
+                "question_type": row[3],
+                "option_a": row[4],
+                "option_b": row[5],
+                "option_c": row[6],
+                "option_d": row[7],
+                "explanation": row[8],
+                "correct_answer": row[9],
+                "topic_id": row[10],
+                "topic": row[11]
+            }
+            for row in rows
+        ]
+
+    finally:
+        connection.close()
+
 # =========================
 # QUIZ DATA MODELS
 # =========================
@@ -198,6 +308,7 @@ class AnswerData(BaseModel):
 
 
 class QuizSubmission(BaseModel):
+    attempt_id: str
     student_id: int
     topic_id: int
     answers: List[AnswerData]
@@ -218,21 +329,98 @@ def submit_quiz(data: QuizSubmission):
     )
 
     try:
-
         cur = conn.cursor()
 
-        # Create quiz attempt
+        # Check whether this attempt was already submitted
+        cur.execute(
+            """
+            SELECT attempt_id, score, student_id
+            FROM quiz_attempts
+            WHERE client_attempt_id = %s
+            """,
+            (data.attempt_id,)
+        )
+
+        existing_attempt = cur.fetchone()
+
+        if existing_attempt:
+            attempt_id, score, existing_student_id = existing_attempt
+
+            if existing_student_id != data.student_id:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Attempt ID belongs to another student."
+                )
+
+            conn.commit()
+
+            return {
+                "message": "Quiz already submitted",
+                "attempt_id": attempt_id,
+                "score": score,
+                "total_questions": len(data.answers),
+                "already_submitted": True
+            }
+
+        # Create a new quiz attempt
         cur.execute(
             """
             INSERT INTO quiz_attempts
-            (student_id, topic_id, started_at, completed_at, score)
-            VALUES (%s, %s, NOW(), NOW(), 0)
+            (
+                student_id,
+                topic_id,
+                started_at,
+                completed_at,
+                score,
+                client_attempt_id
+            )
+            VALUES (%s, %s, NOW(), NOW(), 0, %s)
+            ON CONFLICT (client_attempt_id) DO NOTHING
             RETURNING attempt_id
             """,
-            (data.student_id, data.topic_id)
+            (data.student_id, data.topic_id, data.attempt_id)
         )
 
-        attempt_id = cur.fetchone()[0]
+        inserted_attempt = cur.fetchone()
+
+        # Handle a simultaneous duplicate request
+        if inserted_attempt is None:
+            cur.execute(
+                """
+                SELECT attempt_id, score, student_id
+                FROM quiz_attempts
+                WHERE client_attempt_id = %s
+                """,
+                (data.attempt_id,)
+            )
+
+            existing_attempt = cur.fetchone()
+
+            if not existing_attempt:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Could not retrieve submitted attempt."
+                )
+
+            attempt_id, score, existing_student_id = existing_attempt
+
+            if existing_student_id != data.student_id:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Attempt ID belongs to another student."
+                )
+
+            conn.commit()
+
+            return {
+                "message": "Quiz already submitted",
+                "attempt_id": attempt_id,
+                "score": score,
+                "total_questions": len(data.answers),
+                "already_submitted": True
+            }
+
+        attempt_id = inserted_attempt[0]
 
         score = 0
 
@@ -299,7 +487,8 @@ def submit_quiz(data: QuizSubmission):
             "message": "Quiz submitted successfully",
             "attempt_id": attempt_id,
             "score": score,
-            "total_questions": len(data.answers)
+            "total_questions": len(data.answers),
+            "already_submitted": False
         }
 
     except Exception as e:
@@ -308,15 +497,16 @@ def submit_quiz(data: QuizSubmission):
 
         print("SUBMIT QUIZ ERROR:", e)
 
+        if isinstance(e, HTTPException):
+            raise
+
         raise HTTPException(
             status_code=500,
             detail=str(e)
         )
 
     finally:
-
         conn.close()
-
 
 # =========================
 # PERFORMANCE ANALYSIS
@@ -697,6 +887,9 @@ def student_topic_progress(student_id: int):
     finally:
         conn.close()
         
+        
+        
+
 @app.post("/practice-attempt")
 def save_practice_attempt(data: dict):
 
@@ -758,4 +951,199 @@ def save_practice_attempt(data: dict):
         )
 
     finally:
-        conn.close()    
+        conn.close()  
+        
+
+
+@app.get("/practice/{topic_name}")
+def get_practice_questions(topic_name: str):
+
+    connection = get_connection()
+
+    try:
+        with connection.cursor() as cursor:
+
+            cursor.execute("""
+                SELECT
+                    q.question_id,
+                    q.question_text,
+                    q.difficulty,
+                    q.option_a,
+                    q.option_b,
+                    q.option_c,
+                    q.option_d,
+                    q.correct_answer,
+                    q.explanation,
+                    t.topic_id,
+                    t.name
+                FROM questions q
+                JOIN topics t
+                    ON q.topic_id = t.topic_id
+                WHERE LOWER(t.name) = LOWER(%s)
+                AND q.is_practice = TRUE
+                ORDER BY RANDOM()
+            """, (topic_name,))
+
+            rows = cursor.fetchall()
+
+        if not rows:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No practice questions found for {topic_name}."
+            )
+
+        return [
+            {
+                "question_id": row[0],
+                "question_text": row[1],
+                "difficulty": row[2],
+                "option_a": row[3],
+                "option_b": row[4],
+                "option_c": row[5],
+                "option_d": row[6],
+                "correct_answer": row[7],
+                "explanation": row[8],
+                "topic_id": row[9],
+                "topic": row[10]
+            }
+            for row in rows
+        ]
+
+    finally:
+        connection.close()
+
+      
+class GenerateQuestionsRequest(BaseModel):
+    topic_id: int
+    difficulty: str = "Medium"
+    count: int = Field(default=5, ge=1, le=10)
+
+
+@app.post("/generate-questions")
+def generate_questions(data: GenerateQuestionsRequest):
+
+    if client is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Gemini API key is not configured."
+        )
+
+    connection = get_connection()
+
+    try:
+        with connection.cursor() as cur:
+
+            # Get topic name
+            cur.execute(
+                "SELECT name FROM topics WHERE topic_id = %s",
+                (data.topic_id,)
+            )
+
+            topic = cur.fetchone()
+
+            if topic is None:
+                raise HTTPException(status_code=404, detail="Topic not found.")
+
+            topic_name = topic[0]
+
+            # Generate questions using Gemini
+            prompt = f"""
+            Generate {data.count} multiple-choice questions
+            about {topic_name}.
+            Difficulty: {data.difficulty}.
+
+            Return only a valid JSON array.
+            Each object must contain:
+            question_text, option_a, option_b, option_c,
+            option_d, correct_answer, explanation.
+
+            correct_answer must exactly match one option.
+            """
+
+            response = client.models.generate_content(
+                model="gemini-3.8-flash",
+                contents=prompt,
+                config={"response_mime_type": "application/json"}
+            )
+
+            questions = json.loads(response.text)
+
+            if not isinstance(questions, list) or len(questions) != data.count:
+                raise ValueError("Invalid questions returned by Gemini.")
+
+            saved_questions = []
+
+            for q in questions:
+
+                options = [
+                    q["option_a"],
+                    q["option_b"],
+                    q["option_c"],
+                    q["option_d"]
+                ]
+
+                if q["correct_answer"] not in options:
+                    raise ValueError("Invalid correct answer.")
+
+                cur.execute("""
+    INSERT INTO questions (
+        topic_id,
+        question_text,
+        difficulty,
+        question_type,
+        correct_answer,
+        explanation,
+        option_a,
+        option_b,
+        option_c,
+        option_d,
+        is_practice,
+        is_ai_generated
+    )
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    RETURNING question_id
+""", (
+    data.topic_id,
+    q["question_text"],
+    data.difficulty,
+    "MCQ",
+    q["correct_answer"],
+    q["explanation"],
+    q["option_a"],
+    q["option_b"],
+    q["option_c"],
+    q["option_d"],
+    False,
+    True
+))
+
+                question_id = cur.fetchone()[0]
+
+                saved_questions.append({
+                    "question_id": question_id,
+                    **q
+                })
+
+        connection.commit()
+
+        return {
+            "message": "Questions generated and saved successfully!",
+            "topic": topic_name,
+            "count": len(saved_questions),
+            "questions": saved_questions
+        }
+
+    except HTTPException:
+        connection.rollback()
+        raise
+
+    except Exception as e:
+        connection.rollback()
+        print("QUESTION GENERATION ERROR:", e)
+        raise HTTPException(
+            status_code=500,
+            detail="Question generation failed. Please try again."
+        )
+
+    finally:
+        connection.close()
